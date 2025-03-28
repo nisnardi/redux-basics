@@ -1,42 +1,210 @@
-import { Text, View, StyleSheet, Button } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  FlatList,
+  StyleSheet,
+  SafeAreaView,
+  Pressable,
+} from "react-native";
 import { useSelector, useDispatch } from "react-redux";
+import {
+  setTodos,
+  addTodo,
+  updateTodo,
+  deleteTodo,
+  Todo,
+} from "@/redux/todoSlice";
 import { RootState } from "@/redux/store";
-import { increment, decrement, incrementByAmount } from "@/redux/counterSlice";
+import { router } from "expo-router";
 
-export default function Index() {
-  const count = useSelector((state: RootState) => state.counter.value);
-  const dispatch = useDispatch();
+const API_URL = "https://jsonplaceholder.typicode.com/todos?_limit=5";
 
-  // console.log(decrement());
-  // console.log(increment());
-  // console.log(incrementByAmount(5));
+interface TodoListitemProps {
+  todo: Todo;
+  isEditing: boolean;
+  onDelete: (id: number) => void;
+  onSetEditMode: (id: number) => void;
+  onSave: ({ id, text }: Todo) => void;
+}
+
+interface TodoData {
+  completed: boolean;
+  id: number;
+  title: string;
+  userId: number;
+}
+
+const TodoListItem = ({
+  todo,
+  isEditing,
+  onDelete,
+  onSetEditMode,
+  onSave,
+}: TodoListitemProps) => {
+  const [editText, setEditText] = useState(todo.text);
+
+  const onDeleteHandler = () => {
+    onDelete(todo.id);
+  };
+
+  const onEditPressHandler = () => {
+    onSetEditMode(todo.id);
+  };
+
+  const onSaveHander = () => {
+    if (editText.trim()) {
+      onSave({
+        id: todo.id,
+        text: editText,
+      });
+    }
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Contador: {count}</Text>
+    <Pressable
+      style={styles.todoItem}
+      onPress={() =>
+        router.navigate({ pathname: "/todo", params: { id: todo.id } })
+      }
+    >
       <View style={styles.row}>
-        <Button title="-" onPress={() => dispatch(decrement())} />
-        <Button title="+" onPress={() => dispatch(increment())} />
+        {isEditing ? (
+          <TextInput
+            style={styles.input}
+            value={editText}
+            onChangeText={(text) => {
+              setEditText(text);
+            }}
+          />
+        ) : (
+          <Text style={styles.todoText}>{todo.text}</Text>
+        )}
       </View>
-      <Button
-        title="Incrementar en 5"
-        onPress={() => dispatch(incrementByAmount(5))}
-      />
-    </View>
+      <View style={styles.buttonContainer}>
+        {isEditing ? (
+          <Button title="Salvar" onPress={onSaveHander} />
+        ) : (
+          <Button title="Editar" onPress={onEditPressHandler} />
+        )}
+        <Button title="Borrar" color="red" onPress={onDeleteHandler} />
+      </View>
+    </Pressable>
+  );
+};
+
+export default function Index() {
+  const dispatch = useDispatch();
+  const todos = useSelector((state: RootState) => state.todos.data);
+  const [input, setInput] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchTodos = async () => {
+      const response = await fetch(API_URL);
+      const data: TodoData[] = await response.json();
+      const formattedTodos = data.map((item) => ({
+        id: item.id,
+        text: item.title,
+      }));
+      dispatch(setTodos(formattedTodos));
+    };
+
+    fetchTodos();
+  }, []);
+
+  const handleAddTodo = () => {
+    if (input.trim()) {
+      dispatch(addTodo(input));
+      setInput("");
+    }
+  };
+
+  const handleUpdateTodo = ({ id, text }: Todo) => {
+    dispatch(updateTodo({ id, newText: text }));
+    setEditId(null);
+  };
+
+  const handleDeleteTodo = (id: number) => {
+    dispatch(deleteTodo(id));
+  };
+
+  const handleSetEditMode = (id: number) => {
+    setEditId(id);
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Ingrese un nuevo Todo"
+            value={input}
+            onChangeText={setInput}
+          />
+          <Button title="Agregar" onPress={handleAddTodo} />
+        </View>
+
+        <FlatList
+          data={todos}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <TodoListItem
+              todo={item}
+              isEditing={editId === item.id}
+              onDelete={handleDeleteTodo}
+              onSetEditMode={handleSetEditMode}
+              onSave={handleUpdateTodo}
+            />
+          )}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    justifyContent: "center",
+    padding: 20,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    marginVertical: 10,
     alignItems: "center",
   },
-  row: {
-    flexDirection: "row",
+  input: {
+    flex: 1,
+    borderBottomWidth: 1,
+    padding: 8,
+    marginRight: 10,
   },
-  text: {
-    fontSize: 24,
-    marginBottom: 10,
+  todoItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    marginVertical: 5,
+    borderRadius: 5,
+    elevation: 3,
+  },
+  todoText: {
+    fontSize: 14,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 5,
+    width: "40%",
+  },
+  row: {
+    paddingLeft: 10,
+    width: "60%",
   },
 });
